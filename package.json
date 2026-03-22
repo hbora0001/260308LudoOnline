@@ -1,0 +1,21 @@
+{
+  "name": "260308ludoonline",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Online multiplayer Ludo",
+  "scripts": {
+    "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix client run build && cp -r client/dist server/ || xcopy client\\dist server\\dist /E /I /H /Y",
+    "start": "npm --prefix server run start"
+  },
+  "keywords": [
+    "ludo",
+    "socket.io",
+    "react"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
