@@ -17,16 +17,43 @@ const DEFAULT_SERVER_URL = window.location.origin;
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || DEFAULT_SERVER_URL;
 const SESSION_KEY = "ludo-session-id";
 const STACK_OFFSETS = [
-  [0, 0],
-  [0.95, 0],
-  [-0.95, 0],
-  [0, 0.95],
-  [0, -0.95],
-  [0.75, 0.75],
-  [-0.75, 0.75],
-  [0.75, -0.75],
-  [-0.75, -0.75],
+  [0, 0], // First token: normal size
+  [1.2, 0], // Second token: offset right, smaller
+  [-1.2, 0], // Third token: offset left, smaller
+  [0, 1.2], // Fourth token: offset down, smaller
 ];
+
+// Audio context for movement sounds
+let audioContext = null;
+function getAudioContext() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioContext;
+}
+
+function playMoveSound() {
+  try {
+    const ctx = getAudioContext();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    
+    oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.1);
+    
+    gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.1);
+  } catch (e) {
+    // Silently fail if audio is not supported
+  }
+}
+
 const DICE_PIPS = {
   1: [5],
   2: [1, 9],
@@ -104,12 +131,52 @@ function App() {
   const [isRolling, setIsRolling] = useState(false);
   const [rollingFace, setRollingFace] = useState(1);
   const [lastStableDiceValue, setLastStableDiceValue] = useState(1);
+  // Animation state for step-by-step movement
+  const [animatingTokens, setAnimatingTokens] = useState(new Set());
+  const [tokenPositions, setTokenPositions] = useState(new Map());
+  const [pendingDiceValue, setPendingDiceValue] = useState(null);
 
   const prevStateRef = useRef(null);
   const rollIntervalRef = useRef(null);
   const rollStopTimeoutRef = useRef(null);
   const rollingFaceRef = useRef(1);
   const sessionId = useMemo(() => getOrCreateSessionId(), []);
+
+  // Animation function with access to state setters
+  const animateTokenStepByStep = (tokenKey, pathPositions, onComplete, speed = 250) => {
+    setAnimatingTokens(prev => new Set(prev).add(tokenKey));
+    
+    let positionIndex = 0;
+    const animatePosition = () => {
+      if (positionIndex < pathPositions.length) {
+        const pos = pathPositions[positionIndex];
+        setTokenPositions(prev => new Map(prev).set(tokenKey, pos));
+        
+        if (positionIndex > 0 && soundOn) {
+          playMoveSound();
+        }
+        
+        positionIndex++;
+        setTimeout(animatePosition, speed); // Use configurable speed
+      } else {
+        // Animation complete
+        setTokenPositions(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(tokenKey);
+          return newMap;
+        });
+        setAnimatingTokens(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(tokenKey);
+          return newSet;
+        });
+        onComplete();
+      }
+    };
+    
+    animatePosition();
+  };
+
   const boardCells = useMemo(() => {
     const trackKeys = new Set(TRACK_GRID.map(([r, c]) => cellKey(r, c)));
     const safeKeys = new Set(SAFE_TRACK_INDEXES.map((i) => {
@@ -180,6 +247,113 @@ function App() {
   useEffect(() => {
     const onRoomState = (nextState) => {
       const prev = prevStateRef.current;
+      
+      // Detect token movements and animate them
+      if (prev?.game?.board && nextState?.game?.board) {
+        const prevBoard = prev.game.board;
+        const nextBoard = nextState.game.board;
+        
+        // Find moved tokens
+        const movedTokens = [];
+        const capturedTokens = [];
+        COLORS.forEach(color => {
+          const prevPositions = prevBoard[color] || [-1, -1, -1, -1];
+          const nextPositions = nextBoard[color] || [-1, -1, -1, -1];
+          
+          prevPositions.forEach((prevPos, tokenIndex) => {
+            const nextPos = nextPositions[tokenIndex];
+            if (prevPos !== nextPos && prevPos >= 0 && nextPos >= 0) {
+              // Generate path through all intermediate positions
+              const pathPositions = [];
+              const steps = Math.abs(nextPos - prevPos);
+              for (let i = 0; i <= steps; i++) {
+                const currentProgress = prevPos + i;
+                pathPositions.push(positionForToken(color, tokenIndex, currentProgress));
+              }
+              
+              movedTokens.push({
+                color,
+                tokenIndex,
+                pathPositions
+              });
+            } else if (prevPos >= 0 && nextPos === -1) {
+              // Token captured - animate backward to yard at high speed
+              const pathPositions = [];
+              for (let progress = prevPos; progress >= -1; progress--) {
+                pathPositions.push(positionForToken(color, tokenIndex, progress));
+              }
+              
+              capturedTokens.push({
+                color,
+                tokenIndex,
+                pathPositions
+              });
+            }
+          });
+        });
+        
+        // Function to start animations with proper timing
+        const startAnimations = () => {
+          // Animate moved tokens
+          if (movedTokens.length > 0) {
+            movedTokens.forEach(({ color, tokenIndex, pathPositions }) => {
+              animateTokenStepByStep(`${color}-${tokenIndex}`, pathPositions, () => {
+                // Animation complete callback if needed
+              });
+            });
+          }
+          
+          // Animate captured tokens after moved tokens complete (if any)
+          if (capturedTokens.length > 0) {
+            const animateCaptures = () => {
+              capturedTokens.forEach(({ color, tokenIndex, pathPositions }) => {
+                animateTokenStepByStep(`${color}-${tokenIndex}`, pathPositions, () => {
+                  // Animation complete callback if needed
+                }, 80); // High speed for captures
+              });
+            };
+            
+            if (movedTokens.length > 0) {
+              // Wait for all moved tokens to finish animating
+              const checkMovedComplete = () => {
+                const movedTokenKeys = movedTokens.map(({ color, tokenIndex }) => `${color}-${tokenIndex}`);
+                const allMovedComplete = movedTokenKeys.every(key => !animatingTokens.has(key));
+                if (allMovedComplete) {
+                  animateCaptures();
+                } else {
+                  setTimeout(checkMovedComplete, 50);
+                }
+              };
+              checkMovedComplete();
+            } else {
+              animateCaptures();
+            }
+          }
+        };
+        
+        // Check if this is an auto-move (dice value changed and only one movable token)
+        const isAutoMove = prev?.game?.diceValue !== nextState?.game?.diceValue && 
+                          nextState?.game?.movableTokens?.length === 1 &&
+                          movedTokens.length > 0;
+        
+        if (isAutoMove) {
+          // Wait for dice animation to complete before starting token animation
+          const waitForDiceAnimation = () => {
+            if (isRolling) {
+              // Dice is still animating, wait a bit more
+              setTimeout(waitForDiceAnimation, 10);
+            } else {
+              // Dice animation is complete, start token animations
+              startAnimations();
+            }
+          };
+          waitForDiceAnimation();
+        } else {
+          // Start animations immediately for manual moves
+          startAnimations();
+        }
+      }
+      
       if (soundOn && prev?.game?.diceValue !== nextState?.game?.diceValue && nextState?.game?.diceValue) {
         playTone("dice");
       }
@@ -217,14 +391,17 @@ function App() {
   useEffect(() => {
     const incomingDice = roomState?.game?.diceValue;
     if (!incomingDice) return;
-    if (rollIntervalRef.current) {
-      window.clearInterval(rollIntervalRef.current);
-      rollIntervalRef.current = null;
-    }
+
+    // Store the dice value for the animation timeout to use
+    setPendingDiceValue(incomingDice);
+
+    // Only update the dice value, don't stop the animation
+    // The animation will stop naturally after 500ms via the timeout
     setLastStableDiceValue(incomingDice);
     rollingFaceRef.current = incomingDice;
     setRollingFace(incomingDice);
-    setIsRolling(false);
+
+    // Don't set setIsRolling(false) here - let the timeout handle it
   }, [roomState?.game?.diceValue]);
 
   useEffect(() => {
@@ -263,18 +440,25 @@ function App() {
         groups.set(key, currentGroup + 1);
 
         const [ox, oy] = STACK_OFFSETS[currentGroup] || [0, 0];
+        const isStacked = currentGroup > 0;
+        
+        // Use animated position if token is currently animating
+        const animatedPos = tokenPositions.get(`${color}-${tokenIndex}`);
+        const finalPos = animatedPos || pos;
+        
         views.push({
           key: `${color}-${tokenIndex}`,
           color,
           tokenIndex,
-          left: pos.x + ox,
-          top: pos.y + oy,
+          left: finalPos.x + ox,
+          top: finalPos.y + oy,
+          isStacked,
         });
       });
     });
 
     return views;
-  }, [roomState?.game?.board, roomState?.game?.colorsInPlay, roomState?.game?.status, roomState?.participants]);
+  }, [roomState?.game?.board, roomState?.game?.colorsInPlay, roomState?.game?.status, roomState?.participants, tokenPositions]);
   const shownDiceValue = isRolling
     ? rollingFace
     : (roomState?.game?.diceValue ?? roomState?.game?.lastDiceValue ?? lastStableDiceValue);
@@ -386,6 +570,7 @@ function App() {
     }
 
     setIsRolling(true);
+    setPendingDiceValue(null);
     rollIntervalRef.current = window.setInterval(() => {
       const nextFace = 1 + Math.floor(Math.random() * 6);
       rollingFaceRef.current = nextFace;
@@ -397,8 +582,15 @@ function App() {
         window.clearInterval(rollIntervalRef.current);
         rollIntervalRef.current = null;
       }
+      // Ensure we show the final rolled value when animation stops
+      const finalDiceValue = pendingDiceValue || roomState?.game?.diceValue || roomState?.game?.lastDiceValue;
+      if (finalDiceValue) {
+        rollingFaceRef.current = finalDiceValue;
+        setRollingFace(finalDiceValue);
+      }
       setIsRolling(false);
-    }, 500);
+      setPendingDiceValue(null);
+    }, 100);
 
     const res = await withAck("rollDice", { roomCode, sessionId });
     if (!res?.ok) {
@@ -411,6 +603,7 @@ function App() {
         rollStopTimeoutRef.current = null;
       }
       setIsRolling(false);
+      setPendingDiceValue(null);
       setError(res?.error || "Could not roll dice");
     }
   }
@@ -419,6 +612,17 @@ function App() {
     const res = await withAck("moveToken", { roomCode, sessionId, tokenIndex });
     if (!res?.ok) {
       setError(res?.error || "Could not move token");
+    }
+  }
+
+  async function forfeitGame() {
+    if (!confirm("Are you sure you want to forfeit the game?")) {
+      return;
+    }
+    
+    const res = await withAck("forfeit", { roomCode, sessionId });
+    if (!res?.ok) {
+      setError(res?.error || "Could not forfeit game");
     }
   }
 
@@ -500,6 +704,15 @@ function App() {
                     <strong>{p.username}</strong>
                     {!p.isConnected ? <span className="muted">offline</span> : null}
                   </div>
+                  {p.color === me?.color && roomState?.game?.status === "playing" && (
+                    <button 
+                      className="forfeit-btn"
+                      onClick={forfeitGame}
+                      title="Forfeit game"
+                    >
+                      Forfeit
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -528,7 +741,7 @@ function App() {
               return (
                 <button
                   key={token.key}
-                  className={`token ${token.color} ${canClick ? "can-move" : ""}`}
+                  className={`token ${token.color} ${canClick ? "can-move" : ""} ${token.isStacked ? "stacked" : ""}`}
                   style={{ left: `${token.left}%`, top: `${token.top}%` }}
                   onClick={() => canClick && moveToken(token.tokenIndex)}
                 />
@@ -549,9 +762,11 @@ function App() {
               <button className="start-center-btn" onClick={startGame} disabled={!canStart}>Start Game</button>
             ) : null}
           </div>
-
-          <p className="status board-status">{roomState?.game?.lastAction}</p>
         </section>
+
+        <div className="game-info">
+          <p className="status game-status">{roomState?.game?.lastAction}</p>
+        </div>
       </main>
 
       {error ? <p className="error floating">{error}</p> : null}

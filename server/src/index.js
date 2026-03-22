@@ -120,18 +120,28 @@ function getGlobalIndex(color, progress) {
 
 function getMovableTokens(game, color, diceValue) {
   const tokens = game.board[color];
-  if (!tokens) return [];
+  
+  // Safety check: ensure tokens array exists and is valid
+  if (!tokens || !Array.isArray(tokens) || tokens.length !== 4) {
+    // If board is corrupted, reinitialize this color's tokens
+    console.warn(`Board corruption detected for color ${color}. Reinitializing.`);
+    game.board[color] = [-1, -1, -1, -1];
+    return [];
+  }
 
   const movable = [];
   tokens.forEach((progress, tokenIndex) => {
-    if (progress === 57) return;
+    if (progress === 57) return; // Already finished
+    
     if (progress === -1) {
+      // Token in yard - can only move with 6
       if (diceValue === 6) {
         movable.push(tokenIndex);
       }
       return;
     }
 
+    // Token on board - can move if within bounds
     const target = progress + diceValue;
     if (target <= 57) {
       movable.push(tokenIndex);
@@ -403,7 +413,8 @@ function resolveTokenMove(room, player, tokenIndex, { auto } = { auto: false }) 
     nextTurn(game);
   } else {
     game.diceValue = null;
-    game.sixStreak = 0;
+    // Don't reset sixStreak on extra turns - it should persist across extra turns
+    // sixStreak is only reset when nextTurn() is called
     game.awaitingMove = false;
     game.movableTokens = [];
   }
@@ -593,7 +604,12 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (!game.awaitingMove || game.diceValue === null) {
+    if (!game.awaitingMove) {
+      callback({ ok: false, error: "Roll dice first" });
+      return;
+    }
+
+    if (game.diceValue === null) {
       callback({ ok: false, error: "Roll dice first" });
       return;
     }
@@ -605,6 +621,39 @@ io.on("connection", (socket) => {
 
     const moveResult = resolveTokenMove(room, player, tokenIndex, { auto: false });
     callback(moveResult);
+    emitRoom(room);
+  });
+
+  socket.on("forfeit", (payload, callback) => {
+    const roomCode = String(payload?.roomCode || "").trim();
+    const sessionId = String(payload?.sessionId || "").trim();
+    const room = rooms.get(roomCode);
+
+    if (!room) {
+      callback({ ok: false, error: "Room not found" });
+      return;
+    }
+
+    const game = room.game;
+    if (game.status !== "playing") {
+      callback({ ok: false, error: "Game is not active" });
+      return;
+    }
+
+    const player = findBySession(room, sessionId);
+    if (!player || player.role !== "player" || !player.color) {
+      callback({ ok: false, error: "You are not an active player" });
+      return;
+    }
+
+    // Remove the forfeiting player from the game
+    removeColorFromGame(room, player.color, `${player.username} forfeited`);
+    maybeFinishGame(room);
+    if (room.game.status === "finished") {
+      // Game is over
+    }
+
+    callback({ ok: true });
     emitRoom(room);
   });
 

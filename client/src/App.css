@@ -139,7 +139,10 @@ button.ghost {
 }
 
 .game-grid {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
 .board-wrap {
@@ -183,6 +186,34 @@ button.ghost {
   bottom: 8px;
 }
 
+.player-corner.turn {
+  animation: box-blink 0.6s ease-in-out infinite;
+}
+
+.player-corner.turn.red {
+  background: rgba(244, 63, 94, 0.15);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.player-corner.turn.green {
+  background: rgba(16, 185, 129, 0.15);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.player-corner.turn.yellow {
+  background: rgba(245, 158, 11, 0.15);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.player-corner.turn.blue {
+  background: rgba(37, 99, 235, 0.15);
+  border-radius: 12px;
+  padding: 4px;
+}
+
 .player-chip {
   display: inline-flex;
   align-items: center;
@@ -197,7 +228,23 @@ button.ghost {
 .player-chip.turn {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
-  animation: chip-jump 0.8s ease-in-out infinite;
+  animation: chip-blink 0.6s ease-in-out infinite;
+}
+
+.forfeit-btn {
+  margin-top: 4px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.forfeit-btn:hover {
+  background: #b91c1c;
 }
 
 .board {
@@ -370,9 +417,9 @@ button.ghost {
     inset 0 1px 1px rgba(255, 255, 255, 0.42),
     inset 0 -2px 3px rgba(15, 23, 42, 0.28),
     0 1px 2px rgba(15, 23, 42, 0.25);
-  transition: left 0.35s ease, top 0.35s ease, transform 0.2s ease;
   z-index: 4;
   aspect-ratio: 1;
+  transition: transform 0.2s ease; /* Keep only transform transition for hover effects */
 }
 
 .token::before {
@@ -419,7 +466,7 @@ button.ghost {
   width: 110%;
   height: 110%;
   transform: translate(-50%, -50%);
-  border: 4px dashed #facc15;
+  border: 4px dashed #000000;
   border-radius: 50%;
   animation: rotate 2s linear infinite;
   pointer-events: none;
@@ -436,14 +483,14 @@ button.ghost {
   transform: translate(-50%, -50%);
 }
 
-.token.inactive {
-  opacity: 0.45;
-  filter: grayscale(0.2);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+.token.stacked {
+  width: clamp(18px, 1.8vw, 24px);
+  height: clamp(18px, 1.8vw, 24px);
+  z-index: 3;
 }
 
 .dice {
-  --dice-size: clamp(40px, 5.3vw, 48px);
+  --dice-size: clamp(40px, 5.3vw, 40px);
   position: absolute;
   left: 50%;
   top: 50%;
@@ -460,6 +507,16 @@ button.ghost {
   justify-content: center;
   z-index: 3;
   perspective: 480px;
+  transition: box-shadow 0.1s ease;
+}
+
+.dice.active::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 10px;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.1) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 .start-center-btn {
@@ -483,6 +540,22 @@ button.ghost {
   margin: 10px 0 0;
 }
 
+.game-info {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.game-status {
+  margin: 0;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: inline-block;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
 .dice.active {
   cursor: pointer;
 }
@@ -497,6 +570,7 @@ button.ghost {
 
 .dice-cube.rolling {
   animation: dice-spin 0.5s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(37, 99, 235, 0.5));
 }
 
 .dice-cube.show-1 { transform: rotateX(0deg) rotateY(0deg); }
@@ -651,6 +725,21 @@ button.ghost {
   50% { transform: translateY(-3px); }
 }
 
+@keyframes chip-blink {
+  0%, 100% { 
+    transform: translateY(0);
+    opacity: 1;
+    filter: brightness(1);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+  }
+  50% { 
+    transform: translateY(-3px);
+    opacity: 0.7;
+    filter: brightness(1.3);
+    box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
+  }
+}
+
 @keyframes dice-spin {
   0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
   50% { transform: rotateX(180deg) rotateY(180deg) rotateZ(90deg); }
@@ -669,7 +758,7 @@ button.ghost {
 
 @media (max-width: 980px) {
   .game-grid {
-    grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .board {
@@ -678,5 +767,10 @@ button.ghost {
 
   .yard-slot {
     border-radius: 3px;
+  }
+
+  .game-status {
+    font-size: 0.8rem;
+    padding: 6px 12px;
   }
 }
