@@ -5,7 +5,7 @@
   "description": "Online multiplayer Ludo",
   "scripts": {
     "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
-    "build": ".\\.tools\\node\\npm.cmd --prefix client run build && cp -r client/dist server/ || xcopy client\\dist server\\dist /E /I /H /Y",
+    "build": "npm --prefix client run build && cp -r client/dist server/ || xcopy client\\dist server\\dist /E /I /H /Y",
     "start": "npm --prefix server run start"
   },
   "keywords": [
