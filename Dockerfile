@@ -9,30 +9,25 @@ COPY package*.json ./
 COPY client/package*.json ./client/
 COPY server/package*.json ./server/
 
-# Install root dependencies
-RUN npm ci
+# Install dependencies
+RUN npm ci && npm --prefix client ci && npm --prefix server ci
 
-# Install client dependencies (includes vite and build tools)
-RUN npm --prefix client ci
-
-# Copy client source
+# Copy source code
 COPY client/ ./client/
+COPY server/src ./server/src
+COPY scripts/ ./scripts/
 
 # Build the client
 RUN npm --prefix client run build
 
-# Copy server source
-COPY server/src ./server/src
-
-# Copy built client to server dist using Node.js (cross-platform)
-COPY scripts/ ./scripts/
+# Copy built client to server dist
 RUN node scripts/copy-dist.js
 
-# Prune dev dependencies for production (keep only production deps)
-RUN npm ci --omit=dev && npm --prefix server ci
+# Clean up dev dependencies to reduce image size
+RUN npm prune --omit=dev --prefix client && npm prune --omit=dev
 
 # Expose port
 EXPOSE 4000
 
-# Start the application
-CMD ["npm", "--prefix", "server", "start"]
+# Start the server
+CMD ["node", "server/src/index.js"]
