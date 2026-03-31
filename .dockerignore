@@ -6,5 +6,8 @@ README.md
 .nyc_output
 coverage
 .coverage
-client/
 *.log
+server/dist
+client/dist
+.vscode
+.idea
