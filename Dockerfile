@@ -35,12 +35,11 @@ RUN echo "=== Server dist contents ===" && ls -la server/dist/ && echo "=== End 
 # Clean up dev dependencies to reduce image size
 RUN npm prune --omit=dev --prefix client && npm prune --omit=dev
 
-# Expose port
-EXPOSE 4000
+# Expose port (Railway may override)
+EXPOSE 4000 8080
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PORT=4000
 
 # Start the server
 CMD ["node", "server/src/index.js"]
