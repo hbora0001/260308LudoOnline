@@ -1,6 +1,9 @@
 # Use Node.js 18 LTS
 FROM node:18-alpine
 
+# Add build argument for cache busting
+ARG BUILD_TIMESTAMP=0
+
 # Set working directory
 WORKDIR /app
 
@@ -17,8 +20,8 @@ COPY client/ ./client/
 COPY server/src ./server/src
 COPY scripts/ ./scripts/
 
-# Build the client
-RUN npm --prefix client run build
+# Build the client (cache busting with timestamp)
+RUN echo "Build timestamp: ${BUILD_TIMESTAMP}" && npm --prefix client run build
 
 # Copy built client to server dist
 RUN node scripts/copy-dist.js
