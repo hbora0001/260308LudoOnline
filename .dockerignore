@@ -3,6 +3,9 @@ node_modules
 .gitignore
 README.md
 .env
+.env.local
+client/.env
+client/.env.local
 .nyc_output
 coverage
 .coverage
