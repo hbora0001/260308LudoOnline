@@ -5,9 +5,9 @@
   "description": "Online multiplayer Ludo",
   "scripts": {
     "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
-    "build": "npm --prefix client run build && rm -rf server/dist && cp -r client/dist server/ || (rmdir /s /q server\\dist 2>nul & xcopy client\\dist server\\dist /E /I /H /Y)",
+    "build": "npm --prefix client run build && node scripts/copy-dist.js",
     "start": "npm --prefix server run start",
-    "clean": "rm -rf client/dist server/dist || (rmdir /s /q client\\dist 2>nul & rmdir /s /q server\\dist 2>nul)"
+    "clean": "node scripts/clean-dist.js"
   },
   "keywords": [
     "ludo",
