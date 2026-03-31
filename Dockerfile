@@ -23,11 +23,14 @@ COPY scripts/ ./scripts/
 # Build the client (cache busting with timestamp)
 RUN echo "Build timestamp: ${BUILD_TIMESTAMP}" && npm --prefix client run build
 
+# Debug: Show what was built
+RUN echo "=== Client dist contents ===" && ls -la client/dist/ && echo "=== End client dist ===" && du -sh client/dist/
+
 # Copy built client to server dist
 RUN node scripts/copy-dist.js
 
-# Verify dist directory
-RUN ls -la server/dist/ || echo "Warning: server/dist not found"
+# Debug: Show what was copied
+RUN echo "=== Server dist contents ===" && ls -la server/dist/ && echo "=== End server dist ===" && du -sh server/dist/
 
 # Clean up dev dependencies to reduce image size
 RUN npm prune --omit=dev --prefix client && npm prune --omit=dev
