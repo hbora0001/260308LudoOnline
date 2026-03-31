@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "build": "cd ../client && npm run build && cp -r dist ../server/"
+    "build": "cd ../client && npm run build && rm -rf ../server/dist && cp -r dist ../server/ || (cd ../client && rmdir /s /q dist 2>nul & xcopy dist ..\\server\\dist /E /I /H /Y)"
   },
   "dependencies": {
     "cors": "^2.8.5",
