@@ -698,8 +698,8 @@ function App() {
               if (!p) return null;
 
               return (
-                <div key={color} className={`player-corner ${color}`}>
-                  <div className={`player-chip ${p.color === currentColor ? "turn" : ""}`}>
+                <div key={color} className={`player-corner ${color} ${p.color === currentColor ? "turn" : ""}`}>
+                  <div className="player-chip">
                     <span className="dot" style={{ background: COLOR_HEX[color] }} />
                     <strong>{p.username}</strong>
                     {!p.isConnected ? <span className="muted">offline</span> : null}

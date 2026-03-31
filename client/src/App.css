@@ -740,6 +740,17 @@ button.ghost {
   }
 }
 
+@keyframes box-blink {
+  0%, 100% {
+    opacity: 0.3;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.4);
+  }
+}
+
 @keyframes dice-spin {
   0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
   50% { transform: rotateX(180deg) rotateY(180deg) rotateZ(90deg); }
