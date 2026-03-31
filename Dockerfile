@@ -9,8 +9,11 @@ COPY package*.json ./
 COPY client/package*.json ./client/
 COPY server/package*.json ./server/
 
-# Install all dependencies (including dev deps needed to build client)
+# Install root dependencies
 RUN npm ci
+
+# Install client dependencies (includes vite and build tools)
+RUN npm --prefix client ci
 
 # Copy client source
 COPY client/ ./client/
@@ -25,8 +28,8 @@ COPY server/src ./server/src
 COPY scripts/ ./scripts/
 RUN node scripts/copy-dist.js
 
-# Remove dev dependencies and keep only production
-RUN npm ci --omit=dev && npm ci --prefix server
+# Prune dev dependencies for production (keep only production deps)
+RUN npm ci --omit=dev && npm --prefix server ci
 
 # Expose port
 EXPOSE 4000
